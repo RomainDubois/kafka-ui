@@ -4,9 +4,11 @@ import static io.kafbat.ui.config.auth.AbstractAuthSecurityConfig.AUTH_WHITELIST
 
 import io.kafbat.ui.service.rbac.AccessControlService;
 import io.kafbat.ui.service.rbac.extractor.RbacLdapAuthoritiesExtractor;
+import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import io.kafbat.ui.util.EmptyRedirectStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -14,6 +16,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.ldap.core.DirContextOperations;
 import org.springframework.ldap.core.support.BaseLdapPathContextSource;
 import org.springframework.ldap.core.support.LdapContextSource;
@@ -36,6 +39,9 @@ import org.springframework.security.ldap.userdetails.DefaultLdapAuthoritiesPopul
 import org.springframework.security.ldap.userdetails.LdapAuthoritiesPopulator;
 import org.springframework.security.ldap.userdetails.LdapUserDetailsMapper;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
+import org.springframework.security.web.server.authentication.logout.RedirectServerLogoutSuccessHandler;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -47,8 +53,33 @@ public class LdapSecurityConfig {
 
   private final LdapProperties props;
 
+  public static final String LOGIN_URL = "/login";
+  public static final String LOGOUT_URL = "/login?logout";
+
   @Bean
-  public ReactiveAuthenticationManager authenticationManager(LdapContextSource ldapContextSource,
+  public SecurityWebFilterChain configure(ServerHttpSecurity http) {
+    log.info("Configuring LDAP authentication.");
+    final var authHandler = new RedirectServerAuthenticationSuccessHandler();
+    authHandler.setRedirectStrategy(new EmptyRedirectStrategy());
+    final var logoutSuccessHandler = new RedirectServerLogoutSuccessHandler();
+    logoutSuccessHandler.setLogoutSuccessUrl(URI.create(LOGOUT_URL));
+
+    return http.authorizeExchange(spec -> spec
+            .pathMatchers(AUTH_WHITELIST)
+            .permitAll()
+            .anyExchange()
+            .authenticated()
+        )
+        .formLogin(spec -> spec.loginPage(LOGIN_URL).authenticationSuccessHandler(authHandler))
+        .logout(spec -> spec
+            .logoutSuccessHandler(logoutSuccessHandler)
+            .requiresLogout(ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/logout")))
+        .csrf(ServerHttpSecurity.CsrfSpec::disable)
+        .build();
+  }
+
+  @Bean
+  public ReactiveAuthenticationManager authenticationManager(BaseLdapPathContextSource ldapContextSource,
                                                              LdapAuthoritiesPopulator authoritiesExtractor,
                                                              AccessControlService acs) {
     var rbacEnabled = acs.isRbacEnabled();
