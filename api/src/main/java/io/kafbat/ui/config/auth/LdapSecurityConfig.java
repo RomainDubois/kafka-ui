@@ -4,11 +4,11 @@ import static io.kafbat.ui.config.auth.AbstractAuthSecurityConfig.AUTH_WHITELIST
 
 import io.kafbat.ui.service.rbac.AccessControlService;
 import io.kafbat.ui.service.rbac.extractor.RbacLdapAuthoritiesExtractor;
+import io.kafbat.ui.util.EmptyRedirectStrategy;
 import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import io.kafbat.ui.util.EmptyRedirectStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -79,7 +79,7 @@ public class LdapSecurityConfig {
   }
 
   @Bean
-  public ReactiveAuthenticationManager authenticationManager(BaseLdapPathContextSource ldapContextSource,
+  public ReactiveAuthenticationManager authenticationManager(LdapContextSource ldapContextSource,
                                                              LdapAuthoritiesPopulator authoritiesExtractor,
                                                              AccessControlService acs) {
     var rbacEnabled = acs.isRbacEnabled();
